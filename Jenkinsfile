@@ -2,7 +2,6 @@ pipeline {
   agent any
 
   environment {
-    // optional global variables (you can customize)
     APP_NAME = "myapp"
     HELM_CHART_PATH = "./myapp"
     VALUES_FILE = "./myapp/values.yaml"
@@ -20,14 +19,11 @@ pipeline {
     stage('Set Up Kubeconfig') {
       steps {
         echo "Setting up Kubeconfig for GKE access..."
-        // Retrieve kubeconfig content from Jenkins Credentials
         withCredentials([string(credentialsId: 'kubeconfig', variable: 'KUBECONFIG_CONTENT')]) {
           sh '''
-            # Write kubeconfig content to a temporary file
-            echo "$KUBECONFIG_CONTENT" > kubeconfig.yaml
+            echo "$KUBECONFIG_CONTENT" | base64 --decode > kubeconfig.yaml
             export KUBECONFIG=$PWD/kubeconfig.yaml
 
-            # Verify cluster connection
             echo "Testing cluster access..."
             kubectl cluster-info
           '''
@@ -47,7 +43,7 @@ pipeline {
         echo "Deploying application using Helm..."
         withCredentials([string(credentialsId: 'kubeconfig', variable: 'KUBECONFIG_CONTENT')]) {
           sh '''
-            echo "$KUBECONFIG_CONTENT" > kubeconfig.yaml
+            echo "$KUBECONFIG_CONTENT" | base64 --decode > kubeconfig.yaml
             export KUBECONFIG=$PWD/kubeconfig.yaml
 
             helm upgrade --install ${APP_NAME} ${HELM_CHART_PATH} \
@@ -65,7 +61,7 @@ pipeline {
         echo "Verifying Kubernetes resources..."
         withCredentials([string(credentialsId: 'kubeconfig', variable: 'KUBECONFIG_CONTENT')]) {
           sh '''
-            echo "$KUBECONFIG_CONTENT" > kubeconfig.yaml
+            echo "$KUBECONFIG_CONTENT" | base64 --decode > kubeconfig.yaml
             export KUBECONFIG=$PWD/kubeconfig.yaml
 
             kubectl get pods -o wide
