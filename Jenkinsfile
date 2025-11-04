@@ -2,14 +2,28 @@ pipeline {
   agent any
 
   environment {
-    // optional: define any environment variables
+    KUBECONFIG = credentials('kubeconfig-credential-id')
   }
 
   stages {
-
     stage('Checkout Code') {
       steps {
         checkout scm
+      }
+    }
+
+    stage('Install Helm (if not present)') {
+      steps {
+        sh '''
+          if ! command -v helm &> /dev/null; then
+            echo "Installing Helm..."
+            curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+            chmod 700 get_helm.sh
+            ./get_helm.sh
+          else
+            echo "Helm is already installed."
+          fi
+        '''
       }
     }
 
@@ -21,28 +35,15 @@ pipeline {
 
     stage('Deploy with Helm') {
       steps {
-        // 🟢 This part is the fix: decode kubeconfig from Jenkins credentials
-        withCredentials([string(credentialsId: 'gke-kubeconfig-b64', variable: 'KUBECONFIG_B64')]) {
-          sh '''
-            echo "$KUBECONFIG_B64" | base64 -d > kubeconfig
-            export KUBECONFIG=$(pwd)/kubeconfig
-
-            echo "🔹 Verifying Kubernetes connection..."
-            kubectl config current-context
-            kubectl get nodes
-
-            echo "🔹 Deploying Helm chart..."
-            helm upgrade --install myapp ./myapp -f ./myapp/values.yaml --wait --timeout 5m --atomic
-          '''
-        }
+        sh '''
+          helm upgrade --install myapp ./myapp -f ./myapp/values.yaml --wait --timeout 5m --atomic
+        '''
       }
     }
 
     stage('Verify Deployment') {
       steps {
         sh '''
-          export KUBECONFIG=$(pwd)/kubeconfig
-          echo "🔹 Checking deployed resources..."
           kubectl get pods
           kubectl get svc
         '''
