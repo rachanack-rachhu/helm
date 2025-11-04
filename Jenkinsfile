@@ -11,14 +11,14 @@ pipeline {
 
     stage('Checkout Code') {
       steps {
-        echo "Checking out source code..."
+        echo "🔍 Checking out source code..."
         checkout scm
       }
     }
 
     stage('Set Up Kubeconfig') {
       steps {
-        echo "Setting up Kubeconfig for GKE access..."
+        echo "⚙️ Setting up kubeconfig for GKE access..."
         withCredentials([string(credentialsId: 'kubeconfig', variable: 'KUBECONFIG_CONTENT')]) {
           sh '''
             echo "$KUBECONFIG_CONTENT" | base64 --decode > kubeconfig.yaml
@@ -33,14 +33,14 @@ pipeline {
 
     stage('Helm Dependency Update') {
       steps {
-        echo "Updating Helm dependencies (if any)..."
+        echo "📦 Updating Helm dependencies..."
         sh 'helm dependency update ./myapp || true'
       }
     }
 
     stage('Deploy with Helm') {
       steps {
-        echo "Deploying application using Helm..."
+        echo "🚀 Deploying application using Helm..."
         withCredentials([string(credentialsId: 'kubeconfig', variable: 'KUBECONFIG_CONTENT')]) {
           sh '''
             echo "$KUBECONFIG_CONTENT" | base64 --decode > kubeconfig.yaml
@@ -50,7 +50,7 @@ pipeline {
               -f ${VALUES_FILE} \
               --wait --timeout 5m --atomic
 
-            echo "Helm deployment completed successfully!"
+            echo "✅ Helm deployment completed successfully!"
           '''
         }
       }
@@ -58,7 +58,7 @@ pipeline {
 
     stage('Verify Deployment') {
       steps {
-        echo "Verifying Kubernetes resources..."
+        echo "🔎 Verifying deployment..."
         withCredentials([string(credentialsId: 'kubeconfig', variable: 'KUBECONFIG_CONTENT')]) {
           sh '''
             echo "$KUBECONFIG_CONTENT" | base64 --decode > kubeconfig.yaml
