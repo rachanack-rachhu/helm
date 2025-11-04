@@ -2,52 +2,86 @@ pipeline {
   agent any
 
   environment {
-    KUBECONFIG = credentials('kubeconfig-credential-id')
+    // optional global variables (you can customize)
+    APP_NAME = "myapp"
+    HELM_CHART_PATH = "./myapp"
+    VALUES_FILE = "./myapp/values.yaml"
   }
 
   stages {
+
     stage('Checkout Code') {
       steps {
+        echo "Checking out source code..."
         checkout scm
       }
     }
 
-    stage('Install Helm (if not present)') {
+    stage('Set Up Kubeconfig') {
       steps {
-        sh '''
-          if ! command -v helm &> /dev/null; then
-            echo "Installing Helm..."
-            curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
-            chmod 700 get_helm.sh
-            ./get_helm.sh
-          else
-            echo "Helm is already installed."
-          fi
-        '''
+        echo "Setting up Kubeconfig for GKE access..."
+        // Retrieve kubeconfig content from Jenkins Credentials
+        withCredentials([string(credentialsId: 'kubeconfig', variable: 'KUBECONFIG_CONTENT')]) {
+          sh '''
+            # Write kubeconfig content to a temporary file
+            echo "$KUBECONFIG_CONTENT" > kubeconfig.yaml
+            export KUBECONFIG=$PWD/kubeconfig.yaml
+
+            # Verify cluster connection
+            echo "Testing cluster access..."
+            kubectl cluster-info
+          '''
+        }
       }
     }
 
     stage('Helm Dependency Update') {
       steps {
+        echo "Updating Helm dependencies (if any)..."
         sh 'helm dependency update ./myapp || true'
       }
     }
 
     stage('Deploy with Helm') {
       steps {
-        sh '''
-          helm upgrade --install myapp ./myapp -f ./myapp/values.yaml --wait --timeout 5m --atomic
-        '''
+        echo "Deploying application using Helm..."
+        withCredentials([string(credentialsId: 'kubeconfig', variable: 'KUBECONFIG_CONTENT')]) {
+          sh '''
+            echo "$KUBECONFIG_CONTENT" > kubeconfig.yaml
+            export KUBECONFIG=$PWD/kubeconfig.yaml
+
+            helm upgrade --install ${APP_NAME} ${HELM_CHART_PATH} \
+              -f ${VALUES_FILE} \
+              --wait --timeout 5m --atomic
+
+            echo "Helm deployment completed successfully!"
+          '''
+        }
       }
     }
 
     stage('Verify Deployment') {
       steps {
-        sh '''
-          kubectl get pods
-          kubectl get svc
-        '''
+        echo "Verifying Kubernetes resources..."
+        withCredentials([string(credentialsId: 'kubeconfig', variable: 'KUBECONFIG_CONTENT')]) {
+          sh '''
+            echo "$KUBECONFIG_CONTENT" > kubeconfig.yaml
+            export KUBECONFIG=$PWD/kubeconfig.yaml
+
+            kubectl get pods -o wide
+            kubectl get svc
+          '''
+        }
       }
+    }
+  }
+
+  post {
+    success {
+      echo "✅ Deployment completed successfully!"
+    }
+    failure {
+      echo "❌ Deployment failed. Check logs for details."
     }
   }
 }
